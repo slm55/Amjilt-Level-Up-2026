@@ -18,11 +18,11 @@ export default function App() {
 
   const activeNomination = nominations[activeTab];
 
-  // Keyboard controls: ArrowRight/Left for home-nomination switching, Space to reveal next nominee, Enter to reveal winner
+  // Keyboard controls: ArrowRight/Left/Space for home-nomination switching, Space to reveal next nominee or announce winner, Enter to reveal winner
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (showLanding) {
-        if (event.key === 'ArrowRight') {
+        if (event.key === 'ArrowRight' || event.code === 'Space') {
           event.preventDefault();
           setShowLanding(false);
         }
@@ -38,6 +38,8 @@ export default function App() {
           const unrevealed = activeNomination.nominees.find(nominee => !revealedNominees.has(nominee.id));
           if (unrevealed) {
             toggleReveal(unrevealed.id);
+          } else if (!isWinnerRevealed) {
+            handleRevealWinner();
           }
         }
       } else if (event.code === 'Enter') {
