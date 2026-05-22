@@ -17,7 +17,42 @@ export default function App() {
   const [revealedNominees, setRevealedNominees] = useState<Set<string>>(new Set());
 
   const activeNomination = nominations[activeTab];
-  const isStudentYearGroup = activeNomination?.group === 'student-year';
+
+  // Keyboard controls: ArrowRight/Left for home-nomination switching, Space to reveal next nominee, Enter to reveal winner
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (showLanding) {
+        if (event.key === 'ArrowRight') {
+          event.preventDefault();
+          setShowLanding(false);
+        }
+        return;
+      }
+
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        setShowLanding(true);
+      } else if (event.code === 'Space') {
+        event.preventDefault();
+        if (activeNomination && activeNomination.nominees) {
+          const unrevealed = activeNomination.nominees.find(nominee => !revealedNominees.has(nominee.id));
+          if (unrevealed) {
+            toggleReveal(unrevealed.id);
+          }
+        }
+      } else if (event.code === 'Enter') {
+        event.preventDefault();
+        if (!isWinnerRevealed) {
+          handleRevealWinner();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showLanding, activeNomination, revealedNominees, isWinnerRevealed]);
 
   // Reset states when current nomination changes or returning to landing page
   useEffect(() => {
@@ -30,6 +65,10 @@ export default function App() {
     setIsWinnerRevealed(true);
     setTimeout(() => {
       setShowConfetti(true);
+      // Auto-stop confetti fireworks after 20 seconds
+      setTimeout(() => {
+        setShowConfetti(false);
+      }, 20000);
     }, 1000);
   };
 
@@ -38,7 +77,7 @@ export default function App() {
       const next = new Set(prev);
       if (next.has(nomineeId)) {
         // If already revealed, click opens modal with full detail
-        const nominee = activeNomination.nominees.find(n => n.id === nomineeId);
+        const nominee = activeNomination?.nominees?.find(n => n.id === nomineeId);
         if (nominee) setSelectedNominee(nominee);
       } else {
         next.add(nomineeId);
@@ -47,13 +86,11 @@ export default function App() {
     });
   };
 
-  const allRevealed = isStudentYearGroup || (revealedNominees.size === (activeNomination?.nominees?.length || 0));
+  const allRevealed = revealedNominees.size === (activeNomination?.nominees?.length || 0);
 
   // Group nominations for beautiful select categorized list
   const itNominations = nominations.filter(n => n.group === 'it');
   const desNominations = nominations.filter(n => n.group === 'designer');
-  const generalNominations = nominations.filter(n => n.group === 'general');
-  const studentYearNominations = nominations.filter(n => n.group === 'student-year');
 
   if (showLanding) {
     return (
@@ -89,9 +126,6 @@ export default function App() {
             onClick={() => setShowLanding(false)}
             className="mt-16 flex flex-col items-center gap-3 cursor-pointer group"
           >
-            <span className="text-[10px] uppercase tracking-[0.3em] text-amber-500/80 group-hover:text-amber-400 transition-colors duration-300 font-extrabold">
-             
-            </span>
             {/* Elegant animated horizontal line */}
             <div className="relative w-48 h-[1px] bg-white/10 overflow-hidden">
               <motion.div 
@@ -174,20 +208,6 @@ export default function App() {
                 </option>
               ))}
             </optgroup>
-            <optgroup label="✨ ЖАЛПЫ НОМИНАЦИЯЛАР" className="bg-neutral-950 text-white font-sans font-bold">
-              {generalNominations.map(nom => (
-                <option key={nom.id} value={nominations.findIndex(n => n.id === nom.id)}>
-                  {nom.title}
-                </option>
-              ))}
-            </optgroup>
-            <optgroup label="🎓 ЖЫЛ ОҚУШЫСЫ (TIL)" className="bg-neutral-950 text-white font-sans font-bold">
-              {studentYearNominations.map(nom => (
-                <option key={nom.id} value={nominations.findIndex(n => n.id === nom.id)}>
-                  {nom.title}
-                </option>
-              ))}
-            </optgroup>
           </select>
         </div>
       </header>
@@ -221,144 +241,81 @@ export default function App() {
         {/* Nominees/Winners Cards Grid Area - Styled to fit correctly within height */}
         <section className="flex-1 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 items-center justify-center overflow-hidden min-h-0">
           <AnimatePresence mode="wait">
-            {isStudentYearGroup ? (
-              // Directly show 3 winners side-by-side with heightened gold styling
-              activeNomination.winners?.map((winner, idx) => (
+            {activeNomination?.nominees?.map((nominee, idx) => {
+              const isWinner = nominee.id === activeNomination.winnerId;
+              const isRevealed = revealedNominees.has(nominee.id);
+              const showAsWinner = isWinnerRevealed && isWinner;
+              const fadeOther = isWinnerRevealed && !isWinner;
+
+              return (
                 <motion.div
-                  key={winner.id}
-                  initial={{ opacity: 0, scale: 0.8, y: 30 }}
-                  animate={{ opacity: 1, scale: 1.05, y: 0 }}
-                  transition={{ delay: idx * 0.15, type: "spring", stiffness: 180, damping: 20 }}
-                  onClick={() => setSelectedNominee(winner)}
-                  className="relative h-full max-h-[360px] aspect-[3/4.2] mx-auto bg-neutral-900 border-2 border-amber-500 shadow-[0_0_40px_rgba(245,158,11,0.2)] flex flex-col p-3 cursor-pointer overflow-hidden group"
+                  key={nominee.id}
+                  layout
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ 
+                    opacity: fadeOther ? 0.2 : 1,
+                    scale: showAsWinner ? 1.1 : 0.95,
+                  }}
+                  transition={{ type: "spring", stiffness: 100, damping: 14 }}
+                  style={{ perspective: 1000 }}
+                  className="relative w-full h-full max-h-[350px] aspect-[3/4.2] mx-auto cursor-pointer"
                 >
-                  <div className="absolute top-0 left-0 right-0 bg-amber-500 text-black py-0.5 text-[8px] font-black tracking-widest uppercase text-center z-10">
-                    Үздік Оқушы {idx + 1}
-                  </div>
-
-                  <div className="relative flex-1 bg-neutral-800 overflow-hidden mt-3">
-                    <img
-                      src={winner.photo}
-                      alt={winner.name}
-                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                      referrerPolicy="no-referrer"
-                    />
-                    <div className="absolute inset-0 bg-neutral-950/20" />
-                  </div>
-
-                  <div className="pt-2">
-                    <div className="text-[8px] font-black text-amber-500 uppercase tracking-widest mb-0.5">
-                      Қорытынды Жеңімпаз
-                    </div>
-                    <div className="font-black uppercase tracking-tighter text-[11px] leading-tight text-white mb-1 truncate">
-                      {winner.name}
-                    </div>
-                    <div className="text-[9px] text-neutral-400 truncate italic">
-                      {winner.achievements[0]}
-                    </div>
-                  </div>
-                </motion.div>
-              ))
-            ) : (
-              // Normal nomination flow: click to reveal one-by-one, then announce final winner
-              activeNomination.nominees.map((nominee, idx) => {
-                const isWinner = nominee.id === activeNomination.winnerId;
-                const isRevealed = revealedNominees.has(nominee.id);
-                const showAsWinner = isWinnerRevealed && isWinner;
-                const fadeOther = isWinnerRevealed && !isWinner;
-
-                return (
                   <motion.div
-                    key={nominee.id}
-                    layout
-                    initial={{ opacity: 0, y: 20 }}
                     animate={{ 
-                      opacity: fadeOther ? 0.2 : 1,
-                      scale: showAsWinner ? 1.1 : 0.95,
+                      rotateY: isRevealed ? 180 : 0 
                     }}
-                    transition={{ type: "spring", stiffness: 100, damping: 14 }}
-                    style={{ perspective: 1000 }}
-                    className="relative w-full h-full max-h-[350px] aspect-[3/4.2] mx-auto cursor-pointer"
+                    transition={{ type: "spring", stiffness: 90, damping: 15 }}
+                    className="w-full h-full relative transform-style-3d duration-500"
+                    onClick={() => toggleReveal(nominee.id)}
                   >
-                    <motion.div
-                      animate={{ 
-                        rotateY: isRevealed ? 180 : 0 
-                      }}
-                      transition={{ type: "spring", stiffness: 90, damping: 15 }}
-                      className="w-full h-full relative transform-style-3d duration-500"
-                      onClick={() => toggleReveal(nominee.id)}
+                    {/* CLOSED STATE (BACK side of 3D, gold cover) */}
+                    <div className="absolute inset-0 backface-hidden bg-gradient-to-br from-amber-500 to-amber-600 border border-amber-400 shadow-[0_8px_25px_rgba(245,158,11,0.2)] flex flex-col p-3 rounded-none items-center justify-center text-center select-none">
+                      <div className="text-4xl font-black text-black mb-1 drop-shadow-sm">
+                        0{idx + 1}
+                      </div>
+                      <div className="text-[10px] font-black text-black/85 uppercase tracking-[0.2em] border-t border-black/20 pt-2 px-3">
+                        Үміткер
+                      </div>
+                      <Trophy className="w-6 h-6 mt-4 text-black opacity-80" />
+                    </div>
+
+                    {/* OPEN STATE (FRONT side of 3D, photo and info) */}
+                    <div 
+                      className={`absolute inset-0 backface-hidden [transform:rotateY(180deg)] bg-neutral-900 border flex flex-col p-3 rounded-none overflow-hidden
+                        ${showAsWinner ? 'border-amber-500 shadow-[0_0_50px_rgba(245,158,11,0.6)] ring-2 ring-amber-500' : 'border-white/10'}
+                      `}
                     >
-                      {/* CLOSED STATE (BACK side of 3D, gold cover) */}
-                      <div className="absolute inset-0 backface-hidden bg-gradient-to-br from-amber-500 to-amber-600 border border-amber-400 shadow-[0_8px_25px_rgba(245,158,11,0.2)] flex flex-col p-3 rounded-none items-center justify-center text-center select-none">
-                        <div className="text-4xl font-black text-black mb-1 drop-shadow-sm">
-                          0{idx + 1}
-                        </div>
-                        <div className="text-[10px] font-black text-black/85 uppercase tracking-[0.2em] border-t border-black/20 pt-2 px-3">
-                          Үміткер
-                        </div>
-                        <Trophy className="w-6 h-6 mt-4 text-black opacity-80" />
+                      <div className="relative flex-1 bg-neutral-800 overflow-hidden">
+                        <img
+                          src={nominee.photo}
+                          alt={nominee.name}
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                        <div className="absolute inset-0 bg-neutral-950/10" />
+                        
+                        {showAsWinner && (
+                          <div className="absolute top-0 left-0 right-0 bg-amber-500 text-black py-0.5 text-[8px] font-black tracking-widest uppercase text-center z-10">
+                            ЖЕҢІМПАЗ 🏆
+                          </div>
+                        )}
                       </div>
 
-                      {/* OPEN STATE (FRONT side of 3D, photo and info) */}
-                      <div 
-                        className={`absolute inset-0 backface-hidden [transform:rotateY(180deg)] bg-neutral-900 border flex flex-col p-3 rounded-none overflow-hidden
-                          ${showAsWinner ? 'border-amber-500 shadow-[0_0_50px_rgba(245,158,11,0.6)] ring-2 ring-amber-500' : 'border-white/10'}
-                        `}
-                      >
-                        <div className="relative flex-1 bg-neutral-800 overflow-hidden">
-                          <img
-                            src={nominee.photo}
-                            alt={nominee.name}
-                            className="w-full h-full object-cover"
-                            referrerPolicy="no-referrer"
-                          />
-                          <div className="absolute inset-0 bg-neutral-950/10" />
-                          
-                          {showAsWinner && (
-                            <div className="absolute top-0 left-0 right-0 bg-amber-500 text-black py-0.5 text-[8px] font-black tracking-widest uppercase text-center z-10">
-                              ЖЕҢІМПАЗ 🏆
-                            </div>
-                          )}
+                      <div className="pt-2">
+                        <div className="text-[8px] font-black text-amber-500 uppercase tracking-widest mb-0.5">
+                          {isWinner && isWinnerRevealed ? 'Ресми Иегері' : `Үміткер 0${idx + 1}`}
                         </div>
-
-                        <div className="pt-2">
-                          <div className="text-[8px] font-black text-amber-500 uppercase tracking-widest mb-0.5">
-                            {isWinner && isWinnerRevealed ? 'Ресми Иегері' : `Үміткер 0${idx + 1}`}
-                          </div>
-                          <div className={`font-black uppercase tracking-tighter ${showAsWinner ? 'text-xs md:text-sm leading-tight text-amber-400' : 'text-[11px] leading-none text-white'}`}>
-                            {nominee.name}
-                          </div>
+                        <div className={`font-black uppercase tracking-tighter ${showAsWinner ? 'text-xs md:text-sm leading-tight text-amber-400' : 'text-[11px] leading-none text-white'}`}>
+                          {nominee.name}
                         </div>
                       </div>
-                    </motion.div>
+                    </div>
                   </motion.div>
-                );
-              })
-            )}
+                </motion.div>
+              );
+            })}
           </AnimatePresence>
         </section>
-
-        {/* Centered Bottom Action Area for Winner Reveal */}
-        {!isStudentYearGroup && allRevealed && !isWinnerRevealed && (
-          <div className="flex justify-center py-2 shrink-0">
-            <motion.button
-              id="announce-winner-btn"
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              whileHover={{ scale: 1.05 }}
-              onClick={handleRevealWinner}
-              className="bg-amber-500 hover:bg-amber-400 text-black font-black uppercase text-xs tracking-[0.2em] px-8 py-3.5 flex items-center gap-2 transition-all cursor-pointer shadow-[0_0_30px_rgba(245,158,11,0.4)] border border-amber-300"
-            >
-              Жеңімпазды Анықтау <Sparkles className="w-4 h-4" />
-            </motion.button>
-          </div>
-        )}
-
-        {/* Small Bottom Info Line */}
-        <footer className="mt-3 flex items-center justify-between text-[9px] font-mono text-neutral-600 uppercase tracking-widest shrink-0 border-t border-white/5 pt-2">
-          <div>Санаты: {activeNomination.group.toUpperCase()} • {activeNomination.id.toUpperCase()}</div>
-          <div>Level Up 2026 © Барлық құқықтар қорғалған</div>
-        </footer>
       </main>
 
       {/* Nominee Profile Detailed Card Modal */}
