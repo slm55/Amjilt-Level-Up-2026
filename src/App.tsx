@@ -242,7 +242,7 @@ export default function App() {
         <section className="flex-1 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 items-center justify-center overflow-hidden min-h-0">
           <AnimatePresence mode="wait">
             {activeNomination?.nominees?.map((nominee, idx) => {
-              const isWinner = nominee.id === activeNomination.winnerId;
+              const isWinner = activeNomination.winnerIds?.includes(nominee.id) || nominee.id === activeNomination.winnerId;
               const isRevealed = revealedNominees.has(nominee.id);
               const showAsWinner = isWinnerRevealed && isWinner;
               const fadeOther = isWinnerRevealed && !isWinner;
